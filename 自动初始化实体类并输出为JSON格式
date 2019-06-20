@@ -1,0 +1,124 @@
+/**
+ * @Auther Ary
+ * @Date 2019年06月20日 13:59:14
+ * @Name 自动初始化实体类并输出为JSON格式
+ * @Description 通过反射获取实体类，遍历各字段类型并初始化，然后通过fastjson转换为json格式，修改格式后输出。
+ */
+import com.alibaba.fastjson.JSON;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+
+public class EntityToJson {
+
+    public static void main(String[] args) throws Exception {
+        System.out.println(formatJson(JSON.toJSONString(InitEntity(new PipelineExecutionDto()))));
+    }
+
+    /**
+     * 初始化实体类
+     */
+    private static Object InitEntity(Object entity) throws Exception {
+        Field[] fields = entity.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            if (field.getType().getCanonicalName().startsWith("java")) {
+                switch (field.getType().getCanonicalName()) {
+                    case "java.lang.String":
+                        field.set(entity, "");
+                        break;
+                    case "java.lang.Integer":
+                        field.set(entity, 0);
+                        break;
+                    case "java.lang.Boolean":
+                        field.set(entity, true);
+                        break;
+                    case "java.util.Date":
+                        field.set(entity, new Date());
+                        break;
+                    case "java.util.List":
+                        field.set(entity, new ArrayList<>());
+                        break;
+                    case "java.util.Map":
+                        field.set(entity, new HashMap<>());
+                        break;
+                    default:
+                        // 打印漏掉的字段
+                        System.out.println(field.getType().getCanonicalName());
+                        break;
+                }
+            } else if (field.getType().getCanonicalName().startsWith("com.rc.rancherapi")){
+                Object childDto = Class.forName(field.getType().getCanonicalName()).newInstance();
+                field.set(entity, InitEntity(childDto));
+            } else {
+                // 打印漏掉的字段
+                System.out.println(field.getType().getCanonicalName());
+            }
+        }
+        return entity;
+    }
+
+    /**
+     * 格式化json
+     */
+    private static String formatJson(String jsonStr) {
+        if (null == jsonStr || "".equals(jsonStr)) return "";
+        StringBuilder sb = new StringBuilder();
+        char[] c = jsonStr.toCharArray();
+        int indent = 0; //缩进数量
+        for (int i = 0; i < c.length -1; i++) {
+            char current = c[i];
+
+            if (current == '{' && c[i+1] != '}') {
+                sb.append(current);
+                sb.append("\n");
+                indent++;
+                addIndentBlank(sb, indent);
+            } else if (current == '}') {
+                if (c[i-1] == '{') {
+                    sb.append(current);
+                } else {
+                    sb.append("\n");
+                    indent--;
+                    addIndentBlank(sb, indent);
+                    sb.append(current);
+                }
+            } else if (current == '[' && c[i+1] != ']') {
+                sb.append(current);
+                sb.append("\n");
+                indent++;
+                addIndentBlank(sb, indent);
+            } else if (current == ']') {
+                if (c[i-1] == '[') {
+                    sb.append(current);
+                } else {
+                    sb.append("\n");
+                    indent--;
+                    addIndentBlank(sb, indent);
+                    sb.append(current);
+                }
+            } else if (current == ',') {
+                sb.append(current);
+                if (c[i+1] != '\\') {
+                    sb.append("\n");
+                    addIndentBlank(sb, indent);
+                }
+            } else {
+                sb.append(current);
+            }
+        }
+        sb.append("\n}");
+        return sb.toString();
+    }
+
+    /**
+     * 添加缩进
+     */
+    private static void addIndentBlank(StringBuilder sb, int indent) {
+        for (int i = 0; i < indent; i++) {
+            sb.append('\t');
+        }
+    }
+}
